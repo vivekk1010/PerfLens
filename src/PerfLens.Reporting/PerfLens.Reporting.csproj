@@ -1,0 +1,23 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\PerfLens.Core\PerfLens.Core.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Assets\chart.umd.min.js" LogicalName="PerfLens.Reporting.Assets.chart.umd.min.js" />
+    <EmbeddedResource Include="Assets\report.css" LogicalName="PerfLens.Reporting.Assets.report.css" />
+    <EmbeddedResource Include="Assets\report.js" LogicalName="PerfLens.Reporting.Assets.report.js" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="PerfLens.Reporting.Tests" />
+  </ItemGroup>
+
+</Project>

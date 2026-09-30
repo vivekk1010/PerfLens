@@ -1,0 +1,183 @@
+# =============================================================================
+# PerfLens config for the bundled DemoShop sample (samples/PerfLens.DemoShop).
+#
+#   scripts/run-demo.sh                       # builds + starts DemoShop, runs this config
+#   perflens run -c configs/demoshop.yaml     # if DemoShop is already running
+#
+# DemoShop has deliberate problems on purpose, so expect findings and failed
+# thresholds: /slow (slow TTFB), /heavy (large uncompressed/uncached assets,
+# layout shift), /jank (long tasks / TBT), /errors (console errors, 404s,
+# flaky API), /api/flaky (5xx every 10th call).
+#
+# Values like ${NAME:-default} are read from environment variables; the text
+# after ":-" is used when the variable is not set.
+# =============================================================================
+
+name: DemoShop full benchmark
+description: Pages, crawl, login and API load test against the PerfLens DemoShop sample.
+
+target:
+  # Override with: DEMOSHOP_URL=http://127.0.0.1:5099 perflens run -c configs/demoshop.yaml
+  baseUrl: ${DEMOSHOP_URL:-http://127.0.0.1:5080}
+  headers:
+    X-PerfLens-Run: demoshop        # sent with every browser and API request
+  ignoreHttpsErrors: false
+
+# -----------------------------------------------------------------------------
+# Authentication: a scripted UI login performed once before measuring.
+# The resulting cookies (demoshop_session) are reused by every page iteration
+# and, because shareCookiesWithApi is true, by the API load test (/api/orders).
+# -----------------------------------------------------------------------------
+auth:
+  type: Login
+  shareCookiesWithApi: true
+  login:
+    url: /login
+    steps:
+      - action: Fill
+        selector: "#username"
+        value: demo
+      - action: Fill
+        selector: "#password"
+        # Demo-only password; DemoShop reads the same DEMOSHOP_PASSWORD variable.
+        value: ${DEMOSHOP_PASSWORD:-perflens-demo}
+      - action: Click
+        selector: "#login-btn"
+      - action: WaitForUrl
+        value: ".*/dashboard"
+    successUrlPattern: ".*/dashboard"
+    successSelector: "#dashboard-title"
+    timeoutMs: 15000
+
+# -----------------------------------------------------------------------------
+# Pages measured explicitly (in this order). Names must be unique.
+# -----------------------------------------------------------------------------
+pages:
+  - name: Home
+    path: /
+  - name: About                      # fast baseline
+    path: /about
+  - name: Products                   # skeleton + fetch('/api/products')
+    path: /products
+    waitForSelector: "#product-grid a.product"
+  - name: Product Detail             # product + reviews APIs
+    path: /products/1
+  - name: Slow                       # ~700 ms server time
+    path: /slow
+  - name: Heavy                      # ~2 MB uncompressed images + 300 KB JS, CLS
+    path: /heavy
+    thresholds:                      # per-page override (replaces the global page thresholds)
+      ttfbMs: 800
+      lcpMs: 2500
+      cls: 0.1
+      pageWeightKb: 1000
+      requestCount: 40
+  - name: Jank                       # long tasks -> high TBT
+    path: /jank
+  - name: Errors                     # console errors, uncaught exception, 404 script
+    path: /errors
+  - name: Dashboard                  # requires the login above
+    path: /dashboard
+    waitForSelector: "#dashboard-title"
+
+# -----------------------------------------------------------------------------
+# Crawl: discover more same-origin pages from the home page.
+# Already-configured pages are not measured twice.
+# -----------------------------------------------------------------------------
+crawl:
+  enabled: true
+  startPaths: [/]
+  maxDepth: 2
+  maxPages: 15
+  include: []
+  exclude:
+    - "(?i)logout"                   # never follow logout: it would end the session
+  sameOriginOnly: true               # skips https://example.com
+  ignoreQueryString: true
+  ignoreFragments: true
+
+# -----------------------------------------------------------------------------
+# Browser measurement settings.
+# -----------------------------------------------------------------------------
+browser:
+  engine: Chromium
+  headless: true
+  iterations: 3                      # measured loads per page
+  warmupIterations: 1                # unmeasured load first
+  cacheMode: Cold                    # fresh context (empty cache) per iteration
+  viewportWidth: 1366
+  viewportHeight: 768
+  networkProfile: None
+  cpuThrottlingRate: 1
+  navigationTimeoutMs: 30000
+  waitUntil: Load
+  settleMs: 1000                     # let LCP / CLS / long tasks settle after load
+  captureScreenshots: true
+  captureApiCalls: true
+  topResources: 15
+
+# -----------------------------------------------------------------------------
+# API load test (runs after the browser phase).
+# -----------------------------------------------------------------------------
+api:
+  enabled: true
+  # Also load-test GET API calls seen while loading pages (e.g. /api/stats).
+  useDiscoveredEndpoints: true
+  maxDiscoveredEndpoints: 5
+  profile:
+    mode: Closed                     # 10 virtual users sending back-to-back requests
+    concurrency: 10
+    durationSeconds: 10
+    warmupSeconds: 2
+    timeoutMs: 10000
+  endpoints:
+    - name: Products list
+      url: /api/products
+    - name: Product detail
+      url: /api/products/1
+    - name: Product reviews
+      url: /api/products/1/reviews
+    - name: Orders (authenticated)   # uses the login cookie (shareCookiesWithApi)
+      url: /api/orders
+      expectedStatus: [200]
+    - name: Search
+      url: /api/search?q=lamp
+    - name: Slow API                 # 150-350 ms per call
+      url: /api/slow
+      thresholds:
+        p95Ms: 300
+        errorRatePct: 0
+    - name: Flaky API                # every 10th call returns 500 -> ~10% errors
+      url: /api/flaky
+      expectedStatus: [200]
+
+# -----------------------------------------------------------------------------
+# Thresholds (null / omitted = not checked).
+# -----------------------------------------------------------------------------
+thresholds:
+  pageStatistic: p75                 # p50, p75, p90, p95, mean or max
+  page:
+    ttfbMs: 600
+    fcpMs: 1800
+    lcpMs: 2500
+    cls: 0.1
+    tbtMs: 200
+    loadMs: 4000
+    pageWeightKb: 1500
+    requestCount: 60
+    maxConsoleErrors: 0
+  api:
+    p95Ms: 250
+    p99Ms: 500
+    errorRatePct: 1
+  # DemoShop breaches thresholds on purpose; keep the exit code 0 for demos.
+  failOnThresholdBreach: false
+  minScore: null
+
+output:
+  directory: perflens-results/demoshop
+  formats: [html, json, md, csv]
+  timestampedSubfolder: true
+  # baselinePath: perflens-results/demoshop/<previous-run>/results.json
+  regressionTolerancePct: 10
+  runLabel: demoshop

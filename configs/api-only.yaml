@@ -1,0 +1,86 @@
+# =============================================================================
+# API-only load test (no browser pages, no crawl).
+# Targets DemoShop by default; point API_BASE_URL at any HTTP API.
+#
+#   perflens run -c configs/api-only.yaml
+#   API_BASE_URL=https://api.example.com API_TOKEN=... perflens run -c configs/api-only.yaml
+# =============================================================================
+
+name: API load test
+description: Open-model (fixed arrival rate) load test of JSON endpoints.
+
+target:
+  baseUrl: ${API_BASE_URL:-http://127.0.0.1:5080}
+  headers:
+    Accept: application/json
+
+# For a protected API use header auth; the token must come from the environment:
+# auth:
+#   type: Headers
+#   headers:
+#     Authorization: "Bearer ${ENV:API_TOKEN}"
+auth:
+  type: None
+
+pages: []
+crawl:
+  enabled: false
+
+api:
+  enabled: true
+  useDiscoveredEndpoints: false      # needs pages or crawl; not available here
+  profile:
+    # Open model: requests start at a fixed rate whether or not earlier ones
+    # finished, so slow responses show up as latency instead of lowering load
+    # (avoids coordinated omission).
+    mode: Open
+    ratePerSecond: 50
+    durationSeconds: 20
+    warmupSeconds: 3
+    timeoutMs: 5000
+    # maxRequests: 2000              # optional hard cap on measured requests
+  endpoints:
+    - name: Health
+      url: /health
+      expectedStatus: [200]
+      profile:                       # per-endpoint profile override
+        mode: Open
+        ratePerSecond: 100
+        durationSeconds: 10
+        warmupSeconds: 2
+    - name: Products list
+      url: /api/products
+    - name: Search
+      url: /api/search?q=lamp
+      thresholds:
+        p95Ms: 150
+    - name: Slow API
+      url: /api/slow
+      thresholds:
+        p95Ms: 400
+        p99Ms: 500
+    - name: Flaky API
+      url: /api/flaky
+      expectedStatus: [200]
+      thresholds:
+        errorRatePct: 5
+    - name: Echo (POST)
+      url: /api/echo
+      method: POST
+      contentType: application/json
+      body: '{"message":"hello from PerfLens","items":[1,2,3]}'
+      expectedStatus: [200]
+
+thresholds:
+  api:
+    p50Ms: 100
+    p95Ms: 300
+    p99Ms: 600
+    errorRatePct: 1
+    minRps: 40                       # achieved throughput must keep up with the arrival rate
+  failOnThresholdBreach: true
+
+output:
+  directory: perflens-results/api
+  formats: [html, json, md, csv]
+  timestampedSubfolder: true

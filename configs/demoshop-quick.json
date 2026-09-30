@@ -1,0 +1,35 @@
+{
+  // Quick smoke test against DemoShop: 3 pages x 2 iterations + one 5 s API load test.
+  // Usage: scripts/run-demo.sh --quick   (or: perflens run -c configs/demoshop-quick.json)
+  "name": "DemoShop quick smoke",
+  "target": {
+    "baseUrl": "${DEMOSHOP_URL:-http://127.0.0.1:5080}"
+  },
+  "pages": [
+    { "name": "Home", "path": "/" },
+    { "name": "About", "path": "/about" },
+    { "name": "Products", "path": "/products", "waitForSelector": "#product-grid a.product" }
+  ],
+  "crawl": { "enabled": false },
+  "browser": {
+    "iterations": 2,
+    "warmupIterations": 0,
+    "cacheMode": "Cold",
+    "settleMs": 500,
+    "captureScreenshots": false
+  },
+  "api": {
+    "enabled": true,
+    "profile": { "mode": "Closed", "concurrency": 4, "durationSeconds": 5, "warmupSeconds": 1 },
+    "endpoints": [
+      { "name": "Products list", "url": "/api/products", "expectedStatus": [200] }
+    ]
+  },
+  "thresholds": {
+    "failOnThresholdBreach": false
+  },
+  "output": {
+    "directory": "perflens-results/demoshop-quick",
+    "formats": ["html", "json"]
+  }
+}

@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build-test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore and build
+        run: dotnet build PerfLens.sln -c Release
+
+      - name: Install Chromium and OS dependencies
+        run: dotnet src/PerfLens.Cli/bin/Release/net10.0/perflens.dll install-browsers chromium --with-deps
+
+      - name: Test
+        run: dotnet test PerfLens.sln -c Release --no-build --logger "trx" --results-directory test-results
+
+      - name: Benchmark DemoShop
+        run: |
+          dotnet samples/PerfLens.DemoShop/bin/Release/net10.0/PerfLens.DemoShop.dll --urls http://127.0.0.1:5080 &
+          for i in $(seq 1 30); do curl -fs http://127.0.0.1:5080/health && break; sleep 1; done
+          # DemoShop has deliberate performance problems, so a threshold failure (exit 1) is expected here.
+          dotnet src/PerfLens.Cli/bin/Release/net10.0/perflens.dll run -c configs/demoshop-quick.json -o demo-report --label "ci-${{ github.run_number }}" || [ $? -eq 1 ]
+          cat demo-report/summary.md >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: perflens-demo-report
+          path: |
+            demo-report/
+            test-results/

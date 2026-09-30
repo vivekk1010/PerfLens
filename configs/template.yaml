@@ -1,0 +1,266 @@
+# =============================================================================
+# PerfLens configuration template
+# -----------------------------------------------------------------------------
+# Copy this file, adjust it for your application and run:
+#
+#   perflens run -c perflens.yaml
+#
+# Format notes
+#   * YAML (.yaml/.yml) or JSON (.json, comments allowed). Keys are camelCase.
+#   * Enum values are case-insensitive names (e.g. Login, fill, COLD).
+#   * Any key you omit uses the default shown next to it.
+#   * Environment variables:
+#       ${ENV:NAME}          required; the run fails if NAME is not set
+#       ${NAME}              same as above
+#       ${NAME:-fallback}    uses "fallback" when NAME is not set
+#   * NEVER put secrets (passwords, tokens, cookies) in this file. Use ${ENV:...}.
+#
+# Quick start: set target.baseUrl (or export APP_BASE_URL), adjust pages, then
+#   perflens validate -c perflens.yaml && perflens run -c perflens.yaml
+# =============================================================================
+
+# Display name and description used in the report.     default: "PerfLens run"
+name: My application
+description: Performance benchmark of the main user journeys.
+
+# -----------------------------------------------------------------------------
+# target: the application under test
+# -----------------------------------------------------------------------------
+target:
+  # REQUIRED. Absolute http(s) URL. Page paths and API URLs are relative to it.
+  baseUrl: ${APP_BASE_URL:-https://your-app.example.com}
+  # Extra HTTP headers sent with every browser AND API request.   default: {}
+  headers:
+    X-PerfLens: "true"
+  # Cookies added to the browser context before the first navigation.  default: []
+  # domain defaults to the host of baseUrl; path defaults to "/".
+  cookies: []
+  #   - name: feature_flags
+  #     value: new-checkout
+  #   - name: session
+  #     value: ${ENV:APP_SESSION_COOKIE}
+  #     domain: staging.example.com
+  #     path: /
+  # Accept self-signed / invalid TLS certificates (staging only).  default: false
+  ignoreHttpsErrors: false
+  # Custom browser user agent. null = browser default.             default: null
+  # userAgent: "PerfLens/1.0"
+
+# -----------------------------------------------------------------------------
+# auth: how PerfLens signs in before measuring
+#   type: None | Headers | Login | StorageState                  default: None
+# -----------------------------------------------------------------------------
+auth:
+  # Active: no authentication. Pick one of the examples below for protected apps.
+  type: None
+
+  # --- Example 1: header / bearer token auth ---------------------------------
+  # type: Headers
+  # headers:
+  #   Authorization: "Bearer ${ENV:APP_API_TOKEN}"
+  # Reuse the authenticated cookies/headers for the API load test.  default: true
+  shareCookiesWithApi: true
+
+  # --- Example 2: scripted UI login (performed once, before measuring) -------
+  # type: Login
+  # login:
+  #   url: /login                    # relative or absolute.       default: /login
+  #   timeoutMs: 30000               #                               default: 30000
+  #   steps:                         # REQUIRED for Login. Executed in order.
+  #     # action: Fill | Click | Press | WaitForSelector | WaitForUrl | Wait
+  #     #   Fill            selector + value (text to type)
+  #     #   Click           selector
+  #     #   Press           selector + value (key, e.g. Enter)
+  #     #   WaitForSelector selector
+  #     #   WaitForUrl      value = URL regex
+  #     #   Wait            value = milliseconds
+  #     - action: Fill
+  #       selector: "#email"
+  #       value: ${ENV:APP_USER}
+  #     - action: Fill
+  #       selector: "#password"
+  #       value: ${ENV:APP_PASSWORD}
+  #     - action: Click
+  #       selector: "button[type=submit]"
+  #     - action: WaitForUrl
+  #       value: ".*/dashboard"
+  #   # Login counts as successful when the URL matches this regex ...
+  #   successUrlPattern: ".*/dashboard"
+  #   # ... and/or this selector becomes visible.
+  #   successSelector: "#user-menu"
+
+  # --- Example 3: Playwright storage state (cookies + localStorage) --------
+  # Create one with e.g. `npx playwright codegen --save-storage=auth.json <url>`.
+  # type: StorageState
+  # storageStatePath: ./auth.json    # REQUIRED for StorageState
+
+# -----------------------------------------------------------------------------
+# pages: pages measured explicitly, in order.                     default: []
+# -----------------------------------------------------------------------------
+pages:
+  - name: Home                       # unique; defaults to path
+    path: /                          # REQUIRED. Relative to baseUrl or absolute URL
+  - name: Search results
+    path: /search?q=shoes
+    # Page counts as ready only once this selector appears.       default: null
+    waitForSelector: ".results"
+    # Load | DomContentLoaded | NetworkIdle | Commit.   default: browser.waitUntil
+    waitUntil: NetworkIdle
+    # Override browser.iterations for this page (>= 1).           default: null
+    iterations: 3
+    # Per-page thresholds; replace the global page thresholds for this page.
+    # Unlisted fields fall back to the built-in defaults (see thresholds.page).
+    thresholds:
+      lcpMs: 3000
+      tbtMs: 300
+      maxConsoleErrors: 2
+
+# -----------------------------------------------------------------------------
+# crawl: discover and measure additional same-origin pages
+# -----------------------------------------------------------------------------
+crawl:
+  enabled: false                     #                               default: false
+  startPaths: [/]                    # seeds relative to baseUrl.    default: [/]
+  maxDepth: 2                        # link depth from the seeds (>= 0). default: 2
+  maxPages: 20                       # total pages discovered (>= 1). default: 20
+  # Keep only URLs matching at least one regex (empty = all).     default: []
+  include:
+    - "^https?://[^/]+/(products|blog)(/|$)"
+  # Skip URLs matching any regex.  default: ["(?i)logout", "(?i)signout", "(?i)delete"]
+  exclude:
+    - "(?i)logout"
+    - "(?i)signout"
+    - "(?i)delete"
+    - "\\.(pdf|zip)$"
+  sameOriginOnly: true               #                               default: true
+  ignoreQueryString: true            # /a?x=1 and /a?x=2 are one page. default: true
+  ignoreFragments: true              #                               default: true
+
+# -----------------------------------------------------------------------------
+# browser: how pages are loaded and measured
+# -----------------------------------------------------------------------------
+browser:
+  engine: Chromium                   # Chromium | Firefox | Webkit.  default: Chromium
+  headless: true                     #                               default: true
+  iterations: 5                      # measured loads per page (>= 1). default: 5
+  warmupIterations: 1                # unmeasured loads first (>= 0). default: 1
+  # Cold = fresh browser context (empty cache) per iteration,
+  # Warm = one context per page, so later iterations hit the cache. default: Cold
+  cacheMode: Cold
+  viewportWidth: 1366                #                               default: 1366
+  viewportHeight: 768                #                               default: 768
+  # Playwright device descriptor; overrides the viewport, user agent and touch.
+  # Examples: "Pixel 7", "iPhone 13", "Galaxy S9+", "iPad Pro 11".  default: null
+  # device: "Pixel 7"
+  # Network throttling (Chromium): None | Fast3G | Slow4G | Regular4G | Custom
+  #                                                                default: None
+  networkProfile: None
+  # Required when networkProfile is Custom.
+  # customNetwork:
+  #   latencyMs: 150                 #                               default: 150
+  #   downloadKbps: 1600             #                               default: 1600
+  #   uploadKbps: 750                #                               default: 750
+  # CPU slowdown factor (>= 1; 4 ~ mid-tier mobile). Chromium only. default: 1
+  cpuThrottlingRate: 1
+  navigationTimeoutMs: 30000         #                               default: 30000
+  # Extra wait after the ready condition so LCP/CLS/long tasks settle. default: 1500
+  settleMs: 1500
+  # Load | DomContentLoaded | NetworkIdle | Commit.                 default: Load
+  waitUntil: Load
+  captureScreenshots: true           #                               default: true
+  captureApiCalls: true              # record fetch/XHR calls.       default: true
+  topResources: 15                   # largest/slowest resources kept. default: 15
+
+  # --- Mobile emulation example ---------------------------------------------
+  # device: "Pixel 7"
+  # networkProfile: Slow4G
+  # cpuThrottlingRate: 4
+
+# -----------------------------------------------------------------------------
+# api: HTTP load test of API endpoints (runs after the browser phase)
+# -----------------------------------------------------------------------------
+api:
+  enabled: false                     #                               default: false
+  # Also load-test GET calls observed while loading pages (needs pages or crawl).
+  useDiscoveredEndpoints: false      #                               default: false
+  maxDiscoveredEndpoints: 10         #                               default: 10
+  # Default load profile for all endpoints.
+  profile:
+    # Closed = `concurrency` virtual users sending back-to-back requests.
+    # Open   = fixed arrival rate (`ratePerSecond`) regardless of response time;
+    #          avoids coordinated omission.                         default: Closed
+    mode: Open
+    concurrency: 10                  # Closed mode (>= 1).           default: 10
+    ratePerSecond: 20                # Open mode (> 0).              default: 20
+    durationSeconds: 20              # measured duration (>= 1).     default: 20
+    warmupSeconds: 3                 # unmeasured ramp-up (>= 0).    default: 3
+    timeoutMs: 10000                 # per-request timeout (>= 1).   default: 10000
+    # maxRequests: 5000              # optional cap on measured requests. default: null
+  endpoints:
+    - name: List products            # defaults to "METHOD url"
+      url: /api/products             # REQUIRED. Relative to baseUrl or absolute
+      method: GET                    #                               default: GET
+      headers: {}                    # extra headers for this endpoint
+      # Status codes counted as success. Empty = any 2xx/3xx.      default: []
+      expectedStatus: [200]
+    - name: Create order
+      url: /api/orders
+      method: POST
+      contentType: application/json  #                    default: application/json
+      body: '{"productId": 1, "quantity": 2}'
+      headers:
+        Idempotency-Key: perflens-template
+      expectedStatus: [200, 201]
+      # Per-endpoint profile override.
+      profile:
+        mode: Closed
+        concurrency: 5
+        durationSeconds: 15
+        warmupSeconds: 2
+      # Per-endpoint thresholds; replace the global api thresholds.
+      thresholds:
+        p95Ms: 1200
+        errorRatePct: 0.5
+
+# -----------------------------------------------------------------------------
+# thresholds: pass/fail rules (set a value to null to disable that check)
+# -----------------------------------------------------------------------------
+thresholds:
+  # Statistic compared for page metrics: p50 | p75 | p90 | p95 | mean | max. default: p75
+  pageStatistic: p75
+  page:
+    ttfbMs: 800                      # time to first byte.           default: 800
+    fcpMs: 1800                      # first contentful paint.       default: 1800
+    lcpMs: 2500                      # largest contentful paint.     default: 2500
+    cls: 0.1                         # cumulative layout shift.      default: 0.1
+    tbtMs: 200                       # total blocking time.          default: 200
+    loadMs: 4000                     # load event.                   default: 4000
+    pageWeightKb: 3000               # transferred bytes.            default: 3000
+    requestCount: 120                #                               default: 120
+    maxConsoleErrors: 0              #                               default: 0
+  api:
+    p50Ms: null                      #                               default: null
+    p95Ms: 800                       #                               default: 800
+    p99Ms: 1500                      #                               default: 1500
+    errorRatePct: 1                  #                               default: 1
+    minRps: null                     # minimum achieved throughput.  default: null
+  # Exit with a non-zero code when any threshold fails (useful in CI). default: true
+  failOnThresholdBreach: true
+  # Minimum overall score 0-100; null = not enforced.             default: null
+  minScore: null
+
+# -----------------------------------------------------------------------------
+# output: reports and baseline comparison
+# -----------------------------------------------------------------------------
+output:
+  directory: perflens-results        #                    default: perflens-results
+  # Any of html | json | md | csv.            default: [html, json, md, csv]
+  formats: [html, json, md, csv]
+  # Write each run to <directory>/<timestamp>.                     default: true
+  timestampedSubfolder: true
+  # Compare against a previous run's results.json and flag regressions. default: null
+  # baselinePath: perflens-results/2026-01-01_120000/results.json
+  # A metric counts as regressed when it is worse than the baseline by more than this.
+  regressionTolerancePct: 10         #                               default: 10
+  # Free-text label shown in the report (e.g. git SHA or build number). default: null
+  runLabel: ${BUILD_ID:-local}

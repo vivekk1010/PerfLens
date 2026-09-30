@@ -1,0 +1,29 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\PerfLens.Core\PerfLens.Core.csproj" />
+    <ProjectReference Include="..\PerfLens.Browser\PerfLens.Browser.csproj" />
+    <ProjectReference Include="..\PerfLens.Load\PerfLens.Load.csproj" />
+    <ProjectReference Include="..\PerfLens.Analysis\PerfLens.Analysis.csproj" />
+    <ProjectReference Include="..\PerfLens.Reporting\PerfLens.Reporting.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>perflens</AssemblyName>
+    <RootNamespace>PerfLens.Cli</RootNamespace>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <ServerGarbageCollection>true</ServerGarbageCollection>
+    <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
+    <TieredPGO>true</TieredPGO>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\configs\template.yaml" LogicalName="PerfLens.Cli.template.yaml" Condition="Exists('..\..\configs\template.yaml')" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="PerfLens.E2E.Tests" />
+  </ItemGroup>
+
+</Project>
