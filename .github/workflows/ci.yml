@@ -31,7 +31,7 @@ jobs:
           dotnet samples/PerfLens.DemoShop/bin/Release/net10.0/PerfLens.DemoShop.dll --urls http://127.0.0.1:5080 &
           for i in $(seq 1 30); do curl -fs http://127.0.0.1:5080/health && break; sleep 1; done
           # DemoShop has deliberate performance problems, so a threshold failure (exit 1) is expected here.
-          dotnet src/PerfLens.Cli/bin/Release/net10.0/perflens.dll run -c configs/demoshop-quick.json -o demo-report --label "ci-${{ github.run_number }}" || [ $? -eq 1 ]
+          dotnet src/PerfLens.Cli/bin/Release/net10.0/perflens.dll run -c configs/demoshop-quick.json -o demo-report --formats html,json,md,csv --label "ci-${{ github.run_number }}" || [ $? -eq 1 ]
           cat demo-report/summary.md >> "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/upload-artifact@v4
